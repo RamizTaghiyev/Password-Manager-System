@@ -3,8 +3,8 @@ import { View, Text, StyleSheet, FlatList } from 'react-native';
 
 const UserScreen = () => {
   const passwords = [
-    { id: '1', site: 'Google', pass: '********' },
-    { id: '2', site: 'GitHub', pass: '********' },
+    { id: '1', site: ' ', pass: '********' },
+    { id: '2', site: ' ', pass: '********' },
   ];
 
   return (

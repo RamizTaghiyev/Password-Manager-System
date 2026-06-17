@@ -6,14 +6,6 @@ export default function App() {
     <View style={styles.container}>
       <Text style={styles.title}>Password Manager System</Text>
       <Text>Welcome! Please login to continue.</Text>
-      {/* 
-        In a real app, you would use React Navigation here:
-        <Stack.Navigator>
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Admin" component={AdminScreen} />
-          <Stack.Screen name="User" component={UserScreen} />
-        </Stack.Navigator>
-      */}
     </View>
   );
 }
