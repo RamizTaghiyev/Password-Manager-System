@@ -6,26 +6,30 @@ import (
 	"net/http"
 )
 
-func helloHandler(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/" {
-		http.NotFound(w, r)
-		return
-	}
-	fmt.Fprint(w, "Hello, World!")
+func Auth0Middleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		log.Println("Auth0 Middleware: Verifying request...")
+		next.ServeHTTP(w, r)
+	})
+}
+
+func adminHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "Admin Dashboard: Managing users...")
+}
+
+func userHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "User View: Accessing your passwords...")
 }
 
 func main() {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/", helloHandler)
+	mux.Handle("/admin", Auth0Middleware(http.HandlerFunc(adminHandler)))
+	mux.Handle("/user", Auth0Middleware(http.HandlerFunc(userHandler)))
 
-	server := &http.Server{
-		Addr:    ":8080",
-		Handler: mux,
-	}
-
-	log.Println("Server listening on http://localhost:8080")
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		log.Fatalf("Server failed: %s", err)
+	fmt.Println("Server starting on :8080...")
+	if err := http.ListenAndServe(":8080", mux); err != nil {
+		log.Fatal(err)
 	}
 }
