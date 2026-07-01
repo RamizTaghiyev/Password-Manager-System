@@ -1,6 +1,6 @@
 python -c "import os, base64; print(base64.b64encode(os.urandom(32)).decode())"
 
-$env:VAULT_KEY_BASE64="hgEs9QdPver+vOeYHpNdDrtYq/ST4n/s74fpYf4gFuo="
+$env:VAULT_KEY_BASE64="T3MACd5SkIvvbmBq89X5yEeBYP17osT0R8UBVGvvjZQ="
 python main.py
 
 
