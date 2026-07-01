@@ -20,8 +20,10 @@ export function renderRegister(navigate) {
             <label>Confirm password</label>
             <input id="confirm_password" type="password">
 
-            <button id="create-account-button">Create account</button>
-            <button id="back-button">Back</button>
+            <div class="form-actions">
+                <button id="create-account-button">Create account</button>
+                <button id="back-button" class="secondary">Back</button>
+            </div>
 
             <p id="message"></p>
         </div>

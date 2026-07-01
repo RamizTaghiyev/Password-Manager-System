@@ -15,10 +15,8 @@ export function renderTwoFactor(navigate) {
 
             <img class="qr" src="${appState.currentQrDataUrl}">
 
-  <!--
-  <p><b>Manual secret:</b></p>
-  <p class="secret">${appState.currentSecret}</p>
-  -->
+            <p><b>Manual secret:</b></p>
+            <p class="secret">${appState.currentSecret}</p>
 
             <label>Enter 6-digit code</label>
             <input id="totp_code" type="text" maxlength="6">

@@ -5,6 +5,7 @@ import { renderTwoFactor } from "./screens/twofaScreen.js";
 import { renderDashboard } from "./screens/dashboard.js";
 import { renderChangePassword } from "./screens/changePassword.js";
 import { renderForgotPassword } from "./screens/forgotPassword.js";
+import { renderSettings } from "./screens/settings.js";
 
 
 export function navigate(screen, data = null) {
@@ -34,6 +35,10 @@ export function navigate(screen, data = null) {
 
     if (screen === "forgotPassword") {
         renderForgotPassword(navigate);
+    }
+
+    if (screen === "settings") {
+        renderSettings(navigate, data);
     }
 }
 

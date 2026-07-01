@@ -51,14 +51,47 @@ def setup_vault_table():
         "TEXT DEFAULT ''"
     )
 
+    add_column_if_missing(
+        connection,
+        "vault_items",
+        "totp_secret_data",
+        "TEXT"
+    )
+
+    add_column_if_missing(
+        connection,
+        "vault_items",
+        "totp_secret_nonce",
+        "TEXT"
+    )
+
+    add_column_if_missing(
+        connection,
+        "vault_items",
+        "totp_secret_tag",
+        "TEXT"
+    )
+
     connection.commit()
     connection.close()
 
 
-def add_vault_item(users_id, host_name, password, credential_type, description):
+def add_vault_item(users_id, host_name, password, credential_type, description, totp_secret=""):
     encrypted = encrypt_password(password)
 
     vault_id = str(uuid.uuid4())
+
+    totp_secret = (totp_secret or "").strip().replace(" ", "").upper()
+
+    encrypted_totp_data = None
+    encrypted_totp_nonce = None
+    encrypted_totp_tag = None
+
+    if totp_secret != "":
+        encrypted_totp = encrypt_password(totp_secret)
+        encrypted_totp_data = encrypted_totp["encrypted_data"]
+        encrypted_totp_nonce = encrypted_totp["nonce"]
+        encrypted_totp_tag = encrypted_totp["auth_tag"]
 
     connection = get_connection()
     cursor = connection.cursor()
@@ -72,9 +105,12 @@ def add_vault_item(users_id, host_name, password, credential_type, description):
         encrypted_data,
         nonce,
         auth_tag,
-        credential_type
+        credential_type,
+        totp_secret_data,
+        totp_secret_nonce,
+        totp_secret_tag
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         vault_id,
         users_id,
@@ -83,13 +119,91 @@ def add_vault_item(users_id, host_name, password, credential_type, description):
         encrypted["encrypted_data"],
         encrypted["nonce"],
         encrypted["auth_tag"],
-        credential_type
+        credential_type,
+        encrypted_totp_data,
+        encrypted_totp_nonce,
+        encrypted_totp_tag
     ))
 
     connection.commit()
     connection.close()
 
     return vault_id
+
+def set_vault_totp_secret(users_id, vault_id, totp_secret):
+    totp_secret = (totp_secret or "").strip().replace(" ", "").upper()
+
+    if totp_secret == "":
+        return False, "TOTP secret cannot be empty."
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+    SELECT vault_id
+    FROM vault_items
+    WHERE vault_id = ?
+    AND users_id = ?
+    """, (vault_id, users_id))
+
+    vault_item = cursor.fetchone()
+
+    if vault_item is None:
+        connection.close()
+        return False, "Vault item not found or not owned by this user."
+
+    encrypted_totp = encrypt_password(totp_secret)
+
+    cursor.execute("""
+    UPDATE vault_items
+    SET
+        totp_secret_data = ?,
+        totp_secret_nonce = ?,
+        totp_secret_tag = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE vault_id = ?
+    AND users_id = ?
+    """, (
+        encrypted_totp["encrypted_data"],
+        encrypted_totp["nonce"],
+        encrypted_totp["auth_tag"],
+        vault_id,
+        users_id
+    ))
+
+    connection.commit()
+    connection.close()
+
+    return True, "TOTP secret saved for this credential."
+
+
+def reveal_vault_totp_secret(users_id, vault_id):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+    SELECT totp_secret_data, totp_secret_nonce, totp_secret_tag
+    FROM vault_items
+    WHERE users_id = ?
+    AND vault_id = ?
+    """, (users_id, vault_id))
+
+    row = cursor.fetchone()
+    connection.close()
+
+    if row is None:
+        return None
+
+    if row["totp_secret_data"] is None:
+        return None
+
+    secret = decrypt_password(
+        row["totp_secret_data"],
+        row["totp_secret_nonce"],
+        row["totp_secret_tag"]
+    )
+
+    return secret
 
 
 def get_vault_items(users_id):
@@ -104,7 +218,8 @@ def get_vault_items(users_id):
         description,
         credential_type,
         created_at,
-        updated_at
+        updated_at,
+        totp_secret_data
     FROM vault_items
     WHERE users_id = ?
     ORDER BY created_at DESC
@@ -124,7 +239,8 @@ def get_vault_items(users_id):
             "type": row["credential_type"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
-            "password": "************"
+            "password": "************",
+            "has_totp": row["totp_secret_data"] is not None
         })
 
     return items

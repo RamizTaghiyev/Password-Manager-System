@@ -71,7 +71,8 @@ function renderTwoFactorScreen(navigate) {
 
             <img class="qr" src="${changePasswordQrDataUrl}">
 
-
+            <p><b>Manual secret:</b></p>
+            <p class="secret">${appState.currentSecret}</p>
 
             <label>2FA code</label>
             <input id="totp_code" type="text" maxlength="6">

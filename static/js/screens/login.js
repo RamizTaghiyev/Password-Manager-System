@@ -14,8 +14,10 @@ export function renderLogin(navigate) {
             <label>Password</label>
             <input id="password" type="password">
 
-            <button id="login-button">Login</button>
-            <button id="back-button">Back</button>
+            <div class="form-actions">
+                <button id="login-button">Login</button>
+                <button id="back-button" class="secondary">Back</button>
+            </div>
 
             <p id="message"></p>
         </div>

@@ -1,0 +1,8 @@
+python -c "import os, base64; print(base64.b64encode(os.urandom(32)).decode())"
+
+$env:VAULT_KEY_BASE64="hgEs9QdPver+vOeYHpNdDrtYq/ST4n/s74fpYf4gFuo="
+python main.py
+
+
+$env:SLACK_WEBHOOK_URL="https://hooks.slack.com/services/your/webhook/url"
+python main.py

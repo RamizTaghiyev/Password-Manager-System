@@ -24,7 +24,9 @@ from auth_service import (
 from twofa_service import (
     create_secret,
     create_qr_setup,
-    verify_totp
+    verify_totp,
+    get_current_totp_code
+
 )
 
 from email_service import generate_email_code, send_verification_email
@@ -34,6 +36,8 @@ from vault_service import (
     add_vault_item,
     get_vault_items,
     reveal_vault_password,
+    set_vault_totp_secret,
+    reveal_vault_totp_secret,
     setup_server_password_change_request_table,
     create_server_password_change_request,
     get_server_password_change_requests,
@@ -617,6 +621,7 @@ def api_add_vault_item():
     password = data.get("password", "")
     credential_type = data.get("type", "Server")
     description = data.get("description", "").strip()
+    totp_secret = data.get("totp_secret", "").strip()
 
     if users_id == "":
         return make_error("Missing users_id.")
@@ -632,7 +637,8 @@ def api_add_vault_item():
         host_name,
         password,
         credential_type,
-        description
+        description,
+        totp_secret
     )
 
     return jsonify({
@@ -666,6 +672,65 @@ def api_reveal_vault_password():
     return jsonify({
         "success": True,
         "password": password
+    })
+
+
+@app.route("/api/vault-items/set-totp-secret", methods=["POST"])
+def api_set_vault_totp_secret():
+    data = request.get_json()
+
+    if data is None:
+        return make_error("No JSON data received.")
+
+    users_id = data.get("users_id", "")
+    vault_id = data.get("vault_id", "")
+    totp_secret = data.get("totp_secret", "")
+
+    if users_id == "":
+        return make_error("users_id is required.")
+
+    if vault_id == "":
+        return make_error("vault_id is required.")
+
+    success, message = set_vault_totp_secret(users_id, vault_id, totp_secret)
+
+    if not success:
+        return make_error(message)
+
+    return jsonify({
+        "success": True,
+        "message": message
+    })
+
+
+@app.route("/api/vault-items/generate-totp", methods=["POST"])
+def api_generate_vault_totp():
+    data = request.get_json()
+
+    if data is None:
+        return make_error("No JSON data received.")
+
+    users_id = data.get("users_id", "")
+    vault_id = data.get("vault_id", "")
+
+    if users_id == "":
+        return make_error("users_id is required.")
+
+    if vault_id == "":
+        return make_error("vault_id is required.")
+
+    secret = reveal_vault_totp_secret(users_id, vault_id)
+
+    if secret is None:
+        return make_error("No TOTP secret is configured for this credential.", 404)
+
+    totp_data = get_current_totp_code(secret)
+
+    return jsonify({
+        "success": True,
+        "code": totp_data["code"],
+        "period": totp_data["period"],
+        "seconds_remaining": totp_data["seconds_remaining"]
     })
 
 
