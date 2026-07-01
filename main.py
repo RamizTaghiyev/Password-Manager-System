@@ -7,6 +7,8 @@ import json
 import urllib.request
 from cryptography.exceptions import InvalidTag
 from flask import Flask, request, jsonify, render_template
+# from dotenv import load_dotenv
+# load_dotenv(os.path.join(os.path.dirname(__file__), "backend", ".env"))
 
 from auth_service import (
     setup_database,
