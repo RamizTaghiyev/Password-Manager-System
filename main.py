@@ -2,6 +2,10 @@ import hashlib
 import time
 import secrets
 import sqlite3
+import os
+import json
+import urllib.request
+from cryptography.exceptions import InvalidTag
 from flask import Flask, request, jsonify, render_template
 
 from auth_service import (
@@ -24,6 +28,18 @@ from twofa_service import (
 )
 
 from email_service import generate_email_code, send_verification_email
+
+from vault_service import (
+    setup_vault_table,
+    add_vault_item,
+    get_vault_items,
+    reveal_vault_password,
+    setup_server_password_change_request_table,
+    create_server_password_change_request,
+    get_server_password_change_requests,
+    review_server_password_change_request,
+    change_vault_password_after_approval
+)
 
 
 app = Flask(__name__)
@@ -574,8 +590,250 @@ def api_forgot_password_finish():
         "message": "Password reset successfully. You can now log in."
     })
 
+@app.route("/api/vault-items", methods=["GET"])
+def api_get_vault_items():
+    users_id = request.args.get("users_id", "")
+
+    if users_id == "":
+        return make_error("Missing users_id.")
+
+    items = get_vault_items(users_id)
+
+    return jsonify({
+        "success": True,
+        "items": items
+    })
+
+
+@app.route("/api/vault-items", methods=["POST"])
+def api_add_vault_item():
+    data = request.get_json()
+
+    if data is None:
+        return make_error("No JSON data received.")
+
+    users_id = data.get("users_id", "")
+    host_name = data.get("host_name", "").strip()
+    password = data.get("password", "")
+    credential_type = data.get("type", "Server")
+    description = data.get("description", "").strip()
+
+    if users_id == "":
+        return make_error("Missing users_id.")
+
+    if host_name == "":
+        return make_error("Host name cannot be empty.")
+
+    if password == "":
+        return make_error("Password cannot be empty.")
+
+    vault_id = add_vault_item(
+        users_id,
+        host_name,
+        password,
+        credential_type,
+        description
+    )
+
+    return jsonify({
+        "success": True,
+        "message": "Server credential saved.",
+        "vault_id": vault_id
+    })
+
+
+@app.route("/api/vault-items/reveal", methods=["POST"])
+def api_reveal_vault_password():
+    data = request.get_json()
+
+    if data is None:
+        return make_error("No JSON data received.")
+
+    users_id = data.get("users_id", "")
+    vault_id = data.get("vault_id", "")
+
+    try:
+        password = reveal_vault_password(users_id, vault_id)
+    except InvalidTag:
+        return make_error(
+            "Cannot decrypt this vault item. It was probably encrypted with a different vault key, or the encrypted data was inserted manually/corrupted.",
+            500
+        )
+
+    if password is None:
+        return make_error("Vault item not found.", 404)
+
+    return jsonify({
+        "success": True,
+        "password": password
+    })
+
+
+def send_slack_password_change_notification(change_request):
+    webhook_url = os.getenv("SLACK_WEBHOOK_URL")
+
+    if not webhook_url:
+        return
+
+    text = (
+        "New server password change request\n"
+        f"Host: {change_request['host_name']}\n"
+        f"Type: {change_request['credential_type']}\n"
+        f"Requested by: {change_request['requested_by_name']} ({change_request['requested_by_email']})\n"
+        f"Reason: {change_request['reason'] or 'No reason provided'}"
+    )
+
+    payload = {
+        "text": text
+    }
+
+    data = json.dumps(payload).encode("utf-8")
+
+    request = urllib.request.Request(
+        webhook_url,
+        data=data,
+        headers={
+            "Content-Type": "application/json"
+        },
+        method="POST"
+    )
+
+    try:
+        urllib.request.urlopen(request, timeout=5)
+    except Exception:
+        pass
+
+
+@app.route("/api/server-password-change-requests", methods=["GET"])
+def api_get_server_password_change_requests():
+    users_id = request.args.get("users_id", "")
+
+    if users_id == "":
+        return make_error("users_id is required.")
+
+    requests_list = get_server_password_change_requests(users_id)
+
+    if requests_list is None:
+        return make_error("User not found.", 404)
+
+    return jsonify({
+        "success": True,
+        "requests": requests_list
+    })
+
+
+@app.route("/api/server-password-change-requests", methods=["POST"])
+def api_create_server_password_change_request():
+    data = request.get_json()
+
+    if data is None:
+        return make_error("No JSON data received.")
+
+    users_id = data.get("users_id", "")
+    vault_id = data.get("vault_id", "")
+    reason = data.get("reason", "").strip()
+
+    if users_id == "":
+        return make_error("users_id is required.")
+
+    if vault_id == "":
+        return make_error("vault_id is required.")
+
+    change_request, error = create_server_password_change_request(
+        users_id,
+        vault_id,
+        reason
+    )
+
+    if change_request is None:
+        return make_error(error)
+
+    if error is None:
+        send_slack_password_change_notification(change_request)
+
+    return jsonify({
+        "success": True,
+        "message": error or "Password change request sent to Super Admin.",
+        "request": change_request
+    })
+
+
+@app.route("/api/server-password-change-requests/review", methods=["POST"])
+def api_review_server_password_change_request():
+    data = request.get_json()
+
+    if data is None:
+        return make_error("No JSON data received.")
+
+    super_admin_id = data.get("super_admin_id", "")
+    request_id = data.get("request_id", "")
+    decision = data.get("decision", "")
+    review_note = data.get("review_note", "").strip()
+
+    if super_admin_id == "":
+        return make_error("super_admin_id is required.")
+
+    if request_id == "":
+        return make_error("request_id is required.")
+
+    success, message = review_server_password_change_request(
+        super_admin_id,
+        request_id,
+        decision,
+        review_note
+    )
+
+    if not success:
+        return make_error(message)
+
+    return jsonify({
+        "success": True,
+        "message": message
+    })
+
+
+@app.route("/api/vault-items/change-server-password", methods=["POST"])
+def api_change_server_password_after_approval():
+    data = request.get_json()
+
+    if data is None:
+        return make_error("No JSON data received.")
+
+    users_id = data.get("users_id", "")
+    vault_id = data.get("vault_id", "")
+    new_password = data.get("new_password", "")
+    confirm_new_password = data.get("confirm_new_password", "")
+
+    if users_id == "":
+        return make_error("users_id is required.")
+
+    if vault_id == "":
+        return make_error("vault_id is required.")
+
+    if new_password == "":
+        return make_error("New server password is required.")
+
+    if new_password != confirm_new_password:
+        return make_error("Passwords do not match.")
+
+    success, message = change_vault_password_after_approval(
+        users_id,
+        vault_id,
+        new_password
+    )
+
+    if not success:
+        return make_error(message)
+
+    return jsonify({
+        "success": True,
+        "message": message
+    })
+
 def main():
     setup_database()
+    setup_vault_table()
+    setup_server_password_change_request_table()
 
     app.run(
         host="127.0.0.1",

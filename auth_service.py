@@ -102,7 +102,7 @@ def check_password(password, stored_hash):
 
 def create_user(full_name, email, password):
     users_id = str(uuid.uuid4())
-    role = "user"
+    role = "admin"
     password_hash = hash_password(password)
 
     connection = get_connection()
