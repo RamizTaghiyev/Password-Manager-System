@@ -2,7 +2,7 @@ import { renderHome } from "./screens/home.js";
 import { renderRegister } from "./screens/register.js";
 import { renderLogin } from "./screens/login.js";
 import { renderTwoFactor } from "./screens/twofaScreen.js";
-import { renderDashboard } from "./screens/dashboard.js";
+import { renderDashboard } from "./screens/AdminDashboard/index.js";
 import { renderChangePassword } from "./screens/changePassword.js";
 import { renderForgotPassword } from "./screens/forgotPassword.js";
 import { renderSettings } from "./screens/settings.js";
